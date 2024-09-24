@@ -1841,6 +1841,29 @@ Error BaseRAPass::insertPrologEpilog() noexcept {
   ASMJIT_PROPAGATE(cc()->emitProlog(frame));
   ASMJIT_PROPAGATE(_iEmitHelper->emitArgsAssignment(frame, _argsAssignment));
 
+  for (const RABlock* block : _blocks) {
+    BaseNode* node = block->first();
+    if (!node) continue;
+
+    BaseNode* last = block->last();
+    for (;;) {
+      if (node->isInst()) {
+        InstNode* inst = node->as<InstNode>();
+
+        if (inst->isInvoke()) {
+          InvokeNode* invoke = inst->as<InvokeNode>();
+          if (invoke->isTailCall()) {
+            cc()->setCursor(node->prev());
+            ASMJIT_PROPAGATE(cc()->emitEpilog(frame, false));
+          }
+        }
+      }
+      if (node == last)
+        break;
+      node = node->next();
+    }
+  }
+
   cc()->_setCursor(func()->exitNode());
   ASMJIT_PROPAGATE(cc()->emitEpilog(frame));
 

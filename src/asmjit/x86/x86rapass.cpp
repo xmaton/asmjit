@@ -640,10 +640,11 @@ Error RACFGBuilder::onBeforeInvoke(InvokeNode* invokeNode) noexcept {
   }
 
   // This block has function call(s).
-  _curBlock->addFlags(RABlockFlags::kHasFuncCalls);
-  _pass->func()->frame().addAttributes(FuncAttributes::kHasFuncCalls);
-  _pass->func()->frame().updateCallStackSize(fd.argStackSize());
-
+  if (!invokeNode->isTailCall()) {
+    _curBlock->addFlags(RABlockFlags::kHasFuncCalls);
+    _pass->func()->frame().addAttributes(FuncAttributes::kHasFuncCalls);
+    _pass->func()->frame().updateCallStackSize(fd.argStackSize());
+  }
   return kErrorOk;
 }
 

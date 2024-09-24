@@ -258,7 +258,7 @@ public:
   //! These are typically shared between Assembler/Builder/Compiler of a single backend.
   struct Funcs {
     typedef Error (ASMJIT_CDECL* EmitProlog)(BaseEmitter* emitter, const FuncFrame& frame);
-    typedef Error (ASMJIT_CDECL* EmitEpilog)(BaseEmitter* emitter, const FuncFrame& frame);
+    typedef Error (ASMJIT_CDECL* EmitEpilog)(BaseEmitter* emitter, const FuncFrame& frame, bool includeRet);
     typedef Error (ASMJIT_CDECL* EmitArgsAssignment)(BaseEmitter* emitter, const FuncFrame& frame, const FuncArgsAssignment& args);
 
     typedef Error (ASMJIT_CDECL* FormatInstruction)(
@@ -702,7 +702,7 @@ public:
   //! Emits a function prolog described by the given function `frame`.
   ASMJIT_API Error emitProlog(const FuncFrame& frame);
   //! Emits a function epilog described by the given function `frame`.
-  ASMJIT_API Error emitEpilog(const FuncFrame& frame);
+  ASMJIT_API Error emitEpilog(const FuncFrame& frame, bool includeRet = true);
   //! Emits code that reassigns function `frame` arguments to the given `args`.
   ASMJIT_API Error emitArgsAssignment(const FuncFrame& frame, const FuncArgsAssignment& args);
 

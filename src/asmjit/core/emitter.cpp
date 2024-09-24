@@ -251,11 +251,11 @@ Error BaseEmitter::emitProlog(const FuncFrame& frame) {
   return _funcs.emitProlog(this, frame);
 }
 
-Error BaseEmitter::emitEpilog(const FuncFrame& frame) {
+Error BaseEmitter::emitEpilog(const FuncFrame& frame, bool includeRet) {
   if (ASMJIT_UNLIKELY(!_code))
     return DebugUtils::errored(kErrorNotInitialized);
 
-  return _funcs.emitEpilog(this, frame);
+  return _funcs.emitEpilog(this, frame, includeRet);
 }
 
 Error BaseEmitter::emitArgsAssignment(const FuncFrame& frame, const FuncArgsAssignment& args) {

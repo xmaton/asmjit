@@ -590,6 +590,8 @@ public:
   OperandPack _rets;
   //! Function arguments.
   OperandPack* _args;
+  //! Tail call
+  bool _tailCall;
 
   //! \}
 
@@ -600,7 +602,8 @@ public:
   inline InvokeNode(BaseBuilder* ASMJIT_NONNULL(cb), InstId instId, InstOptions options) noexcept
     : InstNodeWithOperands(cb, instId, options, 0),
       _funcDetail(),
-      _args(nullptr) {
+      _args(nullptr),
+      _tailCall(false) {
     setType(NodeType::kInvoke);
     _resetOps();
     _rets.reset();
@@ -684,6 +687,11 @@ public:
   ASMJIT_INLINE_NODEBUG void setArg(size_t argIndex, size_t valueIndex, const BaseReg& reg) noexcept { _setArg(argIndex, valueIndex, reg); }
   //! Sets the function argument at `argIndex` and `valueIndex` to `imm`.
   ASMJIT_INLINE_NODEBUG void setArg(size_t argIndex, size_t valueIndex, const Imm& imm) noexcept { _setArg(argIndex, valueIndex, imm); }
+
+  //! Is this a tail call 
+  ASMJIT_INLINE_NODEBUG bool isTailCall() const noexcept { return _tailCall; }
+
+  ASMJIT_INLINE_NODEBUG void setTailCall() noexcept { _tailCall = true; }
 
   //! \}
 };

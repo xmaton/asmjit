@@ -47,7 +47,7 @@ public:
     const BaseReg& b, const char* comment = nullptr) override;
 
   Error emitProlog(const FuncFrame& frame);
-  Error emitEpilog(const FuncFrame& frame);
+  Error emitEpilog(const FuncFrame& frame, bool includeRet);
 };
 
 void assignEmitterFuncs(BaseEmitter* emitter);

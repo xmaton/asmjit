@@ -517,7 +517,7 @@ ASMJIT_FAVOR_SIZE Error EmitHelper::emitProlog(const FuncFrame& frame) {
   return kErrorOk;
 }
 
-ASMJIT_FAVOR_SIZE Error EmitHelper::emitEpilog(const FuncFrame& frame) {
+ASMJIT_FAVOR_SIZE Error EmitHelper::emitEpilog(const FuncFrame& frame, bool includeRet) {
   Emitter* emitter = _emitter->as<Emitter>();
 
   uint32_t i;
@@ -598,11 +598,12 @@ ASMJIT_FAVOR_SIZE Error EmitHelper::emitEpilog(const FuncFrame& frame) {
     ASMJIT_PROPAGATE(emitter->pop(zbp));
 
   // Emit 'ret' or 'ret x'.
-  if (frame.hasCalleeStackCleanup())
-    ASMJIT_PROPAGATE(emitter->emit(Inst::kIdRet, int(frame.calleeStackCleanup())));
-  else
-    ASMJIT_PROPAGATE(emitter->emit(Inst::kIdRet));
-
+  if (includeRet) {
+      if (frame.hasCalleeStackCleanup())
+          ASMJIT_PROPAGATE(emitter->emit(Inst::kIdRet, int(frame.calleeStackCleanup())));
+      else
+          ASMJIT_PROPAGATE(emitter->emit(Inst::kIdRet));
+  }
   return kErrorOk;
 }
 
@@ -611,9 +612,9 @@ static Error ASMJIT_CDECL Emitter_emitProlog(BaseEmitter* emitter, const FuncFra
   return emitHelper.emitProlog(frame);
 }
 
-static Error ASMJIT_CDECL Emitter_emitEpilog(BaseEmitter* emitter, const FuncFrame& frame) {
+static Error ASMJIT_CDECL Emitter_emitEpilog(BaseEmitter* emitter, const FuncFrame& frame, bool includeRet) {
   EmitHelper emitHelper(emitter, frame.isAvxEnabled(), frame.isAvx512Enabled());
-  return emitHelper.emitEpilog(frame);
+  return emitHelper.emitEpilog(frame, includeRet);
 }
 
 static Error ASMJIT_CDECL Emitter_emitArgsAssignment(BaseEmitter* emitter, const FuncFrame& frame, const FuncArgsAssignment& args) {
