@@ -734,6 +734,31 @@ Error RALocalAllocator::alloc_instruction(InstNode* node) noexcept {
       } while (it.has_next());
     }
 
+    // A call argument that stays live after the call and sits in a register the call preserves is copied into its
+    // argument register (after STEP 5) instead of being moved there; a move would leave it in a clobbered register,
+    // so it would be spilled before the call and reloaded after it.
+    RATiedReg* copy_tied_regs[Globals::kMaxPhysRegs];
+    uint32_t copy_tied_count = 0;
+
+    if (use_pending_count && node->is_invoke()) {
+      for (i = 0; i < count; i++) {
+        RATiedReg* tied_reg = &tied_regs[i];
+        if (tied_reg->is_use_done() || !tied_reg->has_use_id() || tied_reg->is_write() || tied_reg->is_kill() ||
+            tied_reg->is_duplicate() || tied_reg->is_use_consecutive()) {
+          continue;
+        }
+
+        uint32_t phys_id = _cur_assignment.work_to_phys_id(group, tied_reg->work_reg()->work_id());
+        if (phys_id == RAAssignment::kPhysNone || axl::bit_test(will_out, phys_id)) {
+          continue;
+        }
+
+        tied_reg->mark_use_done();
+        use_pending_count--;
+        copy_tied_regs[copy_tied_count++] = tied_reg;
+      }
+    }
+
     // STEP 5
     // ------
     //
@@ -839,6 +864,14 @@ Error RALocalAllocator::alloc_instruction(InstNode* node) noexcept {
 
         must_swap = (old_pending_count == use_pending_count);
       } while (use_pending_count);
+    }
+
+    // All argument registers are settled now, so the copies cannot be overwritten by STEP 5 shuffling.
+    for (i = 0; i < copy_tied_count; i++) {
+      RATiedReg* tied_reg = copy_tied_regs[i];
+      RAWorkReg* work_reg = tied_reg->work_reg();
+      uint32_t src_id = _cur_assignment.work_to_phys_id(group, work_reg->work_id());
+      ASMJIT_PROPAGATE(_pass.emit_move(work_reg, tied_reg->use_id(), src_id));
     }
 
     // STEP 6

@@ -1187,6 +1187,13 @@ ASMJIT_FAVOR_SPEED Error BaseRAPass::build_liveness() noexcept {
   // This is a starting position, reserving [0, 1] for function arguments.
   uint32_t position = 2;
 
+  // Instructions that clobber registers (calls), in position order.
+  struct ClobberSite {
+    NodePosition position;
+    RARegMask clobbered;
+  };
+  axl::ArenaVector<ClobberSite> clobber_sites;
+
   for (uint32_t i = 0; i < num_all_blocks; i++) {
     RABlock* block = _blocks[i];
     if (!block->is_reachable()) {
@@ -1285,11 +1292,11 @@ ASMJIT_FAVOR_SPEED Error BaseRAPass::build_liveness() noexcept {
               work_reg->restrict_consecutive_mask(tied_reg->out_reg_mask());
             }
           }
+        }
 
-          // Update `RAWorkReg::clobber_survival_mask`.
-          if (ra_inst->_clobbered_regs[group] && !tied_reg->is_out_or_kill()) {
-            work_reg->add_clobber_survival_mask(ra_inst->_clobbered_regs[group]);
-          }
+        // `RAWorkReg::clobber_survival_mask` is computed below, once all live spans are known.
+        if (!ra_inst->_clobbered_regs.is_empty()) {
+          ASMJIT_PROPAGATE(clobber_sites.append(arena(), ClobberSite{NodePosition(position), ra_inst->_clobbered_regs}));
         }
 
         if (node->is_invoke()) {
@@ -1327,7 +1334,22 @@ ASMJIT_FAVOR_SPEED Error BaseRAPass::build_liveness() noexcept {
     stats._width = width;
     stats._freq = freq;
     stats._priority = freq + float(int(work_reg->virt_reg()->weight())) * 0.01f;
+
+    // A register is clobbered during the lifetime of this WorkReg if a clobbering instruction at `p` lies inside a
+    // span that continues past it ([a, b) with a <= p and p + 1 < b). Values defined by the instruction start at p + 1
+    // and values it kills end at p + 1, so neither counts.
+    RegGroup group = work_reg->group();
+    size_t site_index = 0;
+    for (const RALiveSpan& span : spans._data) {
+      while (site_index < clobber_sites.size() && clobber_sites[site_index].position < span.a) {
+        site_index++;
+      }
+      for (size_t k = site_index; k < clobber_sites.size() && uint32_t(clobber_sites[k].position) + 1u < uint32_t(span.b); k++) {
+        work_reg->add_clobber_survival_mask(clobber_sites[k].clobbered[group]);
+      }
+    }
   }
+  clobber_sites.release(arena());
 
   ASMJIT_RA_LOG_COMPLEX({
     String& sb = _tmp_string;
@@ -1487,7 +1509,8 @@ ASMJIT_FAVOR_SPEED Error BaseRAPass::bin_pack(RegGroup group) noexcept {
 
       if (work_reg->has_hint_reg_id()) {
         uint32_t phys_id = work_reg->hint_reg_id();
-        if (axl::bit_test(available_regs, phys_id)) {
+        // A hint that is clobbered while the register is live (an argument used after a call) is not worth it.
+        if (axl::bit_test(available_regs, phys_id) && !axl::bit_test(work_reg->clobber_survival_mask(), phys_id)) {
           RALiveSpans& live = _global_live_spans[group][phys_id];
           Error err = tmp_spans.non_overlapping_union_of(arena(), live, work_reg->live_spans());
 
@@ -1606,13 +1629,25 @@ ASMJIT_FAVOR_SPEED Error BaseRAPass::bin_pack(RegGroup group) noexcept {
         continue;
       }
 
+      // Preferred registers that are all clobbered while the register is live (a call argument used after the call)
+      // would only lead to spills, so such a preference is ignored.
       RegMask remaining_phys_regs = available_regs;
-      if (remaining_phys_regs & work_reg->preferred_mask()) {
-        remaining_phys_regs &= work_reg->preferred_mask();
+      RegMask preferred_regs = remaining_phys_regs & work_reg->preferred_mask();
+      if (preferred_regs && (preferred_regs & ~work_reg->clobber_survival_mask())) {
+        remaining_phys_regs = preferred_regs;
       }
 
-      RegMask phys_regs = remaining_phys_regs & ~preserved_regs;
-      remaining_phys_regs &= preserved_regs;
+      // Try volatile registers first, as they need no save/restore. A register live across a call (or anything else
+      // that clobbers) first tries registers that survive it, preferring volatile ones; otherwise it would be spilled
+      // and reloaded around every call, which costs more than saving a preserved register once in the prolog.
+      RegMask first_regs = ~preserved_regs;
+      RegMask survivors = remaining_phys_regs & ~work_reg->clobber_survival_mask();
+      if (work_reg->clobber_survival_mask() && survivors) {
+        first_regs = (survivors & ~preserved_regs) ? survivors & ~preserved_regs : survivors;
+      }
+
+      RegMask phys_regs = remaining_phys_regs & first_regs;
+      remaining_phys_regs &= ~first_regs;
 
       for (;;) {
         if (!phys_regs) {
@@ -1624,16 +1659,6 @@ ASMJIT_FAVOR_SPEED Error BaseRAPass::bin_pack(RegGroup group) noexcept {
         }
 
         uint32_t phys_id = axl::ctz(phys_regs);
-
-        if (work_reg->clobber_survival_mask()) {
-          RegMask preferred_mask = (phys_regs | remaining_phys_regs) & work_reg->clobber_survival_mask();
-          if (preferred_mask) {
-            if (preferred_mask & ~remaining_phys_regs) {
-              preferred_mask &= ~remaining_phys_regs;
-            }
-            phys_id = axl::ctz(preferred_mask);
-          }
-        }
 
         RALiveSpans& live = _global_live_spans[group][phys_id];
         Error err = tmp_spans.non_overlapping_union_of(arena(), live, work_reg->live_spans());
