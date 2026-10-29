@@ -2242,7 +2242,7 @@ Error BaseRAPass::emit_pre_call(InvokeNode* invoke_node) {
 }
 
 // [[pure virtual]]
-Error BaseRAPass::emit_pre_tail(InvokeNode* invoke_node) noexcept {
+Error BaseRAPass::emit_pre_tail(InvokeNode* invoke_node) {
   axl::maybe_unused(invoke_node);
   return make_error(Error::kInvalidState);
 }

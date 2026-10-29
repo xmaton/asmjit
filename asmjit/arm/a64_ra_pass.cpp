@@ -984,7 +984,7 @@ Error ARMRAPass::emit_pre_call(InvokeNode* invoke_node) {
   return Error::kOk;
 }
 
-Error ARMRAPass::emit_pre_tail(InvokeNode* invoke_node) noexcept {
+Error ARMRAPass::emit_pre_tail(InvokeNode* invoke_node) {
   switch (invoke_node->inst_id()) {
     case Inst::kIdB:
     case Inst::kIdBr:

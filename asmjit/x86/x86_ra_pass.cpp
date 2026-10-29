@@ -1693,7 +1693,7 @@ Error X86RAPass::emit_pre_call(InvokeNode* invoke_node) {
   return Error::kOk;
 }
 
-Error X86RAPass::emit_pre_tail(InvokeNode* invoke_node) noexcept {
+Error X86RAPass::emit_pre_tail(InvokeNode* invoke_node) {
   if (invoke_node->inst_id() == Inst::kIdJmp) {
     cc().set_cursor(invoke_node->prev());
     ASMJIT_PROPAGATE(cc().emit_epilog_no_ret(_func->frame()));
